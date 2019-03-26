@@ -1,4 +1,5 @@
 #include <gtk/gtk.h>
+#include<string.h>
 static void print_hello (GtkWidget *widget, gpointer data)
 {
     g_print ("Hello World\n");
@@ -19,6 +20,7 @@ typedef struct PageUI
     GtkWidget* text_view;
     GtkTextBuffer* buffer;
     char* tabLabel;
+    char* filePath;
     struct PageUI* next;
 }pageUI;
 
@@ -40,7 +42,10 @@ int numberOfPages=0;
 static void initaliseTextEditor(TextEditorUI*);
 static void addPage();
 static void removePage();
+static void openFile();
 static void createMenu(TextEditorUI*);
+char* getFileContents(char*);
+void setFileName(char*);
 
 
 TextEditorUI app;
@@ -119,6 +124,7 @@ static void createMenu(TextEditorUI* app)
 
     g_signal_connect(file->new, "activate", G_CALLBACK(addPage),NULL);
     g_signal_connect(file->close, "activate", G_CALLBACK(removePage),NULL);
+    g_signal_connect(file->open, "activate", G_CALLBACK(openFile),NULL);
 }
 
 static void addPage()
@@ -130,13 +136,11 @@ static void addPage()
     page->text_view=gtk_text_view_new();
     gtk_box_pack_start(GTK_BOX(page->box),page->text_view,1,1,0); 
     // Still need to implement the buffer part
-    g_print("New!");
 
     // Add box containing the textWidget as the first tab of the notebook
     gtk_notebook_append_page(GTK_NOTEBOOK(app.notebook),page->box,NULL);
     gtk_widget_show_all (app.window);
 
-    g_print("%s",gtk_notebook_get_tab_label_text(GTK_NOTEBOOK(app.notebook),page->box));
     
     // Append to LinkedList
     if(pageBegin==NULL)
@@ -147,6 +151,7 @@ static void addPage()
     pageEnd->next=NULL;
     ++numberOfPages;
 }
+
 static void removePage()
 {
     if(numberOfPages)
@@ -188,7 +193,59 @@ static void removePage()
         --numberOfPages;
     }
 }
+static void openFile()
+{
+    addPage(); // A new tab must be created
+    GtkWidget *dialog; // The open file dialog box
+    GtkFileChooserAction action = GTK_FILE_CHOOSER_ACTION_OPEN; // Either to open/save. Open in this case.
+    gint res; // The response
+    dialog = gtk_file_chooser_dialog_new ("Open File",
+                                        GTK_WINDOW(app.window),
+                                        action,("_Cancel"),
+                                        GTK_RESPONSE_CANCEL,
+                                        ("_Open"),
+                                        GTK_RESPONSE_ACCEPT,
+                                        NULL);
 
-//Things to implement - SaveFile, Add tab, Open File. This's probably enough for the project.
+    res = gtk_dialog_run (GTK_DIALOG (dialog));
+    if (res == GTK_RESPONSE_ACCEPT) // If user has selected a file
+    {
+        GtkFileChooser* chooser = GTK_FILE_CHOOSER (dialog);
+        pageEnd->filePath = gtk_file_chooser_get_filename (chooser); // Obtain chosen file path
+        char* fileContents=getFileContents(pageEnd->filePath); // Obtain file contents
+        setFileName(pageEnd->filePath); // Set file name from file path
+        gtk_notebook_set_tab_label_text(GTK_NOTEBOOK(app.notebook),GTK_WIDGET(pageEnd->box), pageEnd->tabLabel); 
+        pageEnd->buffer=gtk_text_view_get_buffer (GTK_TEXT_VIEW (pageEnd->text_view));
+        gtk_text_buffer_set_text(pageEnd->buffer, fileContents, -1);
+        free(fileContents);
+    }
+    gtk_widget_destroy (dialog);
+}
+void setFileName(char* filePath) // Function to find fileName given the file path
+{
+    while(filePath[0]) // Go to end of string
+        ++filePath;
+    while(filePath[0]!='/') // Find the last occurence of '/'
+        --filePath;
+    pageEnd->tabLabel=filePath+1;
+}
+char* getFileContents(char* filePath)
+{
+    FILE* f=fopen(filePath,"r");
+    long long int fileLength;
+    if(f)
+    {
+        fseek(f,0,SEEK_END); // Move pointer to end of file.
+        fileLength=ftell(f); // Count number of bytes.
+        fseek(f,0,SEEK_SET); // Move pointer back to start of file.
+        char* fileContents=(char*)malloc(fileLength);
+        fread(fileContents,1,fileLength,f);
+        fclose(f);
+        return fileContents;
+    }
+}
+
+
+//Things to implement - SaveFile
 // Other things we could do, search for words, syntax highlighting based on language, automatic language detection,
 // Find and replace words, maybe compile button for C? Line numbering.
