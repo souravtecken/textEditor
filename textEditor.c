@@ -1,9 +1,6 @@
 #include <gtk/gtk.h>
 #include<string.h>
-static void print_hello (GtkWidget *widget, gpointer data)
-{
-    g_print ("Hello World\n");
-}
+#include<stdio.h>
 typedef struct
 {
     GtkWidget* menu;
@@ -11,6 +8,7 @@ typedef struct
     GtkWidget* new;
     GtkWidget* open;
     GtkWidget* save;
+    GtkWidget* saveAs;
     GtkWidget* close;
 }fileMenu;
 
@@ -43,9 +41,12 @@ static void initaliseTextEditor(TextEditorUI*);
 static void addPage();
 static void removePage();
 static void openFile();
+static void saveFile();
 static void createMenu(TextEditorUI*);
+pageUI* obtainCurrentPage();
+static void saveFileAs();
 char* getFileContents(char*);
-void setFileName(char*);
+void setFileName(char*,pageUI*);
 
 
 TextEditorUI app;
@@ -115,18 +116,21 @@ static void createMenu(TextEditorUI* app)
     file->new=gtk_menu_item_new_with_label("New");
     file->open=gtk_menu_item_new_with_label("Open");
     file->save=gtk_menu_item_new_with_label("Save");
+    file->saveAs=gtk_menu_item_new_with_label("Save As");
     file->close=gtk_menu_item_new_with_label("Close");
 
     gtk_menu_shell_append(GTK_MENU_SHELL(file->menu),file->new);
     gtk_menu_shell_append(GTK_MENU_SHELL(file->menu),file->open);
     gtk_menu_shell_append(GTK_MENU_SHELL(file->menu),file->save);
+    gtk_menu_shell_append(GTK_MENU_SHELL(file->menu),file->saveAs);
     gtk_menu_shell_append(GTK_MENU_SHELL(file->menu),file->close);
 
     g_signal_connect(file->new, "activate", G_CALLBACK(addPage),NULL);
     g_signal_connect(file->close, "activate", G_CALLBACK(removePage),NULL);
     g_signal_connect(file->open, "activate", G_CALLBACK(openFile),NULL);
+    g_signal_connect(file->save, "activate", G_CALLBACK(saveFile),NULL);
+    g_signal_connect(file->saveAs, "activate", G_CALLBACK(saveFileAs),NULL);
 }
-
 static void addPage()
 {
     pageUI* page=(pageUI*)malloc(sizeof(pageUI));
@@ -135,7 +139,11 @@ static void addPage()
     // Set TextWidget
     page->text_view=gtk_text_view_new();
     gtk_box_pack_start(GTK_BOX(page->box),page->text_view,1,1,0); 
-    // Still need to implement the buffer part
+    
+    page->buffer=gtk_text_view_get_buffer (GTK_TEXT_VIEW (page->text_view)); // Sets buffer to textView
+
+    page->tabLabel=NULL;
+    page->filePath=NULL;
 
     // Add box containing the textWidget as the first tab of the notebook
     gtk_notebook_append_page(GTK_NOTEBOOK(app.notebook),page->box,NULL);
@@ -199,7 +207,7 @@ static void openFile()
     GtkWidget *dialog; // The open file dialog box
     GtkFileChooserAction action = GTK_FILE_CHOOSER_ACTION_OPEN; // Either to open/save. Open in this case.
     gint res; // The response
-    dialog = gtk_file_chooser_dialog_new ("Open File",
+    dialog=gtk_file_chooser_dialog_new("Open File",
                                         GTK_WINDOW(app.window),
                                         action,("_Cancel"),
                                         GTK_RESPONSE_CANCEL,
@@ -213,21 +221,20 @@ static void openFile()
         GtkFileChooser* chooser = GTK_FILE_CHOOSER (dialog);
         pageEnd->filePath = gtk_file_chooser_get_filename (chooser); // Obtain chosen file path
         char* fileContents=getFileContents(pageEnd->filePath); // Obtain file contents
-        setFileName(pageEnd->filePath); // Set file name from file path
+        setFileName(pageEnd->filePath,pageEnd); // Set file name from file path
         gtk_notebook_set_tab_label_text(GTK_NOTEBOOK(app.notebook),GTK_WIDGET(pageEnd->box), pageEnd->tabLabel); 
-        pageEnd->buffer=gtk_text_view_get_buffer (GTK_TEXT_VIEW (pageEnd->text_view));
         gtk_text_buffer_set_text(pageEnd->buffer, fileContents, -1);
         free(fileContents);
     }
     gtk_widget_destroy (dialog);
 }
-void setFileName(char* filePath) // Function to find fileName given the file path
+void setFileName(char* filePath,pageUI* page) // Function to find fileName given the file path
 {
     while(filePath[0]) // Go to end of string
         ++filePath;
     while(filePath[0]!='/') // Find the last occurence of '/'
         --filePath;
-    pageEnd->tabLabel=filePath+1;
+    page->tabLabel=filePath+1;
 }
 char* getFileContents(char* filePath)
 {
@@ -244,8 +251,81 @@ char* getFileContents(char* filePath)
         return fileContents;
     }
 }
+pageUI* obtainCurrentPage()
+{
+    gint currentPageNumber=gtk_notebook_get_current_page(GTK_NOTEBOOK(app.notebook));
+    int pageCount=0;
+    pageUI* tempPage=pageBegin;
+    for(;pageCount<currentPageNumber;++pageCount) // Find the current page in the linked list.
+        tempPage=tempPage->next; 
+    return tempPage;
+}
+void saveFile()
+{   
+    pageUI* page=obtainCurrentPage();
+
+    if(page->filePath) // If the file has already been saved, then save to known filePath
+    {
+        FILE* outputFile=fopen(page->filePath,"w"); // Open known file
+        // Obtain text_view buffer
+        GtkTextIter start,end;
+        gchar* fileContent;
+        gtk_text_buffer_get_start_iter(page->buffer,&start);
+        gtk_text_buffer_get_end_iter(page->buffer,&end);
+        fileContent=gtk_text_buffer_get_text(page->buffer,&start,&end,FALSE);
+
+        fprintf(outputFile,"%s",fileContent); // Write to file
+        fclose(outputFile);
+    }
+    else
+    {
+        saveFileAs();
+    }
+}
+void saveFileAs()
+{
+    pageUI* page=obtainCurrentPage();
+
+    // Obtain text_view buffer
+    GtkTextIter start,end;
+    gchar* fileContent;
+    gtk_text_buffer_get_start_iter(page->buffer,&start);
+    gtk_text_buffer_get_end_iter(page->buffer,&end);
+    fileContent=gtk_text_buffer_get_text(page->buffer,&start,&end,FALSE);
+
+    GtkWidget *dialog;
+    GtkFileChooser *chooser;
+    GtkFileChooserAction action = GTK_FILE_CHOOSER_ACTION_SAVE;
+    gint res;
+    dialog=gtk_file_chooser_dialog_new("Save File",
+                                        GTK_WINDOW(app.window),
+                                        action,
+                                        ("_Cancel"),
+                                        GTK_RESPONSE_CANCEL,
+                                        ("_Save"),
+                                        GTK_RESPONSE_ACCEPT,
+                                        NULL);
+    chooser = GTK_FILE_CHOOSER (dialog);
+    gtk_file_chooser_set_do_overwrite_confirmation (chooser, TRUE);
+
+    if (page->tabLabel==NULL) // If new file
+        gtk_file_chooser_set_current_name (chooser,"Untitled document"); 
+    else // File exists already
+        gtk_file_chooser_set_filename (chooser,page->tabLabel);
+
+    res = gtk_dialog_run (GTK_DIALOG (dialog));
+    if (res == GTK_RESPONSE_ACCEPT)
+    {
+        page->filePath = gtk_file_chooser_get_filename (chooser); // Get path of save file
+        FILE* outputFile=fopen(page->filePath,"w"); // Get file pointer to chosen file
+        fprintf(outputFile,"%s",fileContent); // Save contents to file
+        setFileName(page->filePath,page); // Set file name from file path
+        gtk_notebook_set_tab_label_text(GTK_NOTEBOOK(app.notebook),GTK_WIDGET(page->box), page->tabLabel);
+        fclose(outputFile);
+    }
+    gtk_widget_destroy (dialog);
+}
 
 
-//Things to implement - SaveFile
-// Other things we could do, search for words, syntax highlighting based on language, automatic language detection,
+// Other things to could do, search for words, syntax highlighting based on language, automatic language detection,
 // Find and replace words, maybe compile button for C? Line numbering.
