@@ -82,11 +82,12 @@ static void initaliseTextEditor(TextEditorUI* app)
     gtk_box_pack_start(GTK_BOX(app->box),app->menubar,0,0,0);
 
 
+    #if 0
     // Set button widget and assign functions - events
     app->button = gtk_button_new_with_label (":D");
     g_signal_connect (app->button, "clicked", G_CALLBACK (print_hello), NULL);
     g_signal_connect_swapped (app->button, "clicked", G_CALLBACK (gtk_widget_destroy), app->window);
-    
+    #endif
     
 
     // Set notebook widget - for tabbed window
