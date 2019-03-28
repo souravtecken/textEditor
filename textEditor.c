@@ -48,7 +48,6 @@ static void saveFileAs();
 char* getFileContents(char*);
 void setFileName(char*,pageUI*);
 
-
 TextEditorUI app;
 
 int main (int argc, char **argv)
@@ -70,7 +69,7 @@ static void initaliseTextEditor(TextEditorUI* app)
 {
     // Set Window
     app->window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title (GTK_WINDOW (app->window), "Window");
+    gtk_window_set_title (GTK_WINDOW (app->window), "Text Editor");
     gtk_window_set_default_size (GTK_WINDOW (app->window), 500, 500);
 
     // Set Box Container
@@ -102,12 +101,13 @@ static void initaliseTextEditor(TextEditorUI* app)
 static void createMenu(TextEditorUI* app)
 {
     fileMenu* file;
+    GtkAccelGroup *shortcut = gtk_accel_group_new();
+    gtk_window_add_accel_group(GTK_WINDOW(app->window), shortcut);
 
     app->filemenu=(fileMenu*)malloc(sizeof(fileMenu));
     file=app->filemenu;
 
     file->menu=gtk_menu_new();
-    
     file->menuLabel=gtk_menu_item_new_with_label("File");
 
     gtk_menu_item_set_submenu(GTK_MENU_ITEM(file->menuLabel),file->menu);
@@ -131,6 +131,11 @@ static void createMenu(TextEditorUI* app)
     g_signal_connect(file->open, "activate", G_CALLBACK(openFile),NULL);
     g_signal_connect(file->save, "activate", G_CALLBACK(saveFile),NULL);
     g_signal_connect(file->saveAs, "activate", G_CALLBACK(saveFileAs),NULL);
+
+    gtk_widget_add_accelerator(file->new, "activate", shortcut, GDK_KEY_N, GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
+    gtk_widget_add_accelerator(file->close, "activate", shortcut, GDK_KEY_W, GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
+    gtk_widget_add_accelerator(file->open, "activate", shortcut, GDK_KEY_O, GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
+    gtk_widget_add_accelerator(file->save, "activate", shortcut, GDK_KEY_S, GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE);
 }
 static void addPage()
 {
@@ -166,7 +171,6 @@ static void removePage()
     if(numberOfPages)
     {
         gint currentPageNumber=gtk_notebook_get_current_page(GTK_NOTEBOOK(app.notebook));
-        printf("%d",currentPageNumber);
         gtk_notebook_remove_page(GTK_NOTEBOOK(app.notebook),currentPageNumber);
 
         // Remove from LinkedList
