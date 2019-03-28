@@ -14,7 +14,7 @@ typedef struct
 
 typedef struct PageUI
 {
-    GtkWidget* box;
+    GtkWidget* scrolledWindow;
     GtkWidget* text_view;
     GtkTextBuffer* buffer;
     char* tabLabel;
@@ -55,7 +55,6 @@ int main (int argc, char **argv)
     gtk_init(&argc,&argv);
 
     initaliseTextEditor(&app);
-
     // Display the window with all its child elements
     gtk_widget_show_all (app.window);
     // The activate function is called when the activate event is triggered, displaying the texEditor
@@ -71,7 +70,7 @@ static void initaliseTextEditor(TextEditorUI* app)
     app->window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title (GTK_WINDOW (app->window), "Text Editor");
     gtk_window_set_default_size (GTK_WINDOW (app->window), 500, 500);
-
+    g_signal_connect(app->window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
     // Set Box Container
     app->box=gtk_box_new(TRUE,20);
 
@@ -140,11 +139,11 @@ static void createMenu(TextEditorUI* app)
 static void addPage()
 {
     pageUI* page=(pageUI*)malloc(sizeof(pageUI));
-    page->box=gtk_box_new(TRUE,20);
-    
+    page->scrolledWindow=gtk_scrolled_window_new(NULL,NULL);
+    gtk_scrolled_window_set_propagate_natural_height(page->scrolledWindow,TRUE);
     // Set TextWidget
     page->text_view=gtk_text_view_new();
-    gtk_box_pack_start(GTK_BOX(page->box),page->text_view,1,1,0); 
+    gtk_container_add(GTK_CONTAINER(page->scrolledWindow),page->text_view);
     
     page->buffer=gtk_text_view_get_buffer (GTK_TEXT_VIEW (page->text_view)); // Sets buffer to textView
 
@@ -152,7 +151,7 @@ static void addPage()
     page->filePath=NULL;
 
     // Add box containing the textWidget as the first tab of the notebook
-    gtk_notebook_append_page(GTK_NOTEBOOK(app.notebook),page->box,NULL);
+    gtk_notebook_append_page(GTK_NOTEBOOK(app.notebook),page->scrolledWindow,NULL);
     gtk_widget_show_all (app.window);
 
     
@@ -227,7 +226,7 @@ static void openFile()
         pageEnd->filePath = gtk_file_chooser_get_filename (chooser); // Obtain chosen file path
         char* fileContents=getFileContents(pageEnd->filePath); // Obtain file contents
         setFileName(pageEnd->filePath,pageEnd); // Set file name from file path
-        gtk_notebook_set_tab_label_text(GTK_NOTEBOOK(app.notebook),GTK_WIDGET(pageEnd->box), pageEnd->tabLabel); 
+        gtk_notebook_set_tab_label_text(GTK_NOTEBOOK(app.notebook),GTK_WIDGET(pageEnd->scrolledWindow), pageEnd->tabLabel); 
         gtk_text_buffer_set_text(pageEnd->buffer, fileContents, -1);
         free(fileContents);
     }
@@ -325,7 +324,7 @@ void saveFileAs()
         FILE* outputFile=fopen(page->filePath,"w"); // Get file pointer to chosen file
         fprintf(outputFile,"%s",fileContent); // Save contents to file
         setFileName(page->filePath,page); // Set file name from file path
-        gtk_notebook_set_tab_label_text(GTK_NOTEBOOK(app.notebook),GTK_WIDGET(page->box), page->tabLabel);
+        gtk_notebook_set_tab_label_text(GTK_NOTEBOOK(app.notebook),GTK_WIDGET(page->scrolledWindow), page->tabLabel);
         fclose(outputFile);
     }
     gtk_widget_destroy (dialog);
